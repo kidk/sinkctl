@@ -17,6 +17,17 @@ type plain struct {
 	Name string `json:"name" yaml:"name"`
 }
 
+// json-tagged only, like generated API types
+type apiType struct {
+	ID    string `json:"id"`
+	Count int    `json:"count"`
+	B     []bool `json:"b"`
+}
+
+type text string
+
+func (t text) Text() string { return string(t) }
+
 func TestResolve(t *testing.T) {
 	cases := []struct {
 		in   Format
@@ -55,6 +66,8 @@ func TestWrite(t *testing.T) {
 		{"yaml", YAML, row{"a"}, "name: a\n"},
 		{"table", Table, row{"a"}, "NAME\na\n"},
 		{"table fallback", Table, plain{"a"}, "name: a\n"},
+		{"yaml json tags", YAML, apiType{"007", 3, []bool{true}}, "id: \"007\"\ncount: 3\nb:\n  - true\n"},
+		{"table text", Table, text("# trace\n"), "# trace\n"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

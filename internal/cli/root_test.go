@@ -9,11 +9,21 @@ import (
 // buffers are non-TTY, so auto output resolves to JSON
 func exec(t *testing.T, args ...string) (code int, stdout, stderr string) {
 	t.Helper()
+	return execAPI(t, "", args...)
+}
+
+// execAPI runs against Bugsink at url; empty url means no credentials.
+func execAPI(t *testing.T, url string, args ...string) (code int, stdout, stderr string) {
+	t.Helper()
+	token := ""
+	if url != "" {
+		token = "tok"
+	}
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BUGSINK_URL", "")
-	t.Setenv("BUGSINK_TOKEN", "")
+	t.Setenv("BUGSINK_URL", url)
+	t.Setenv("BUGSINK_TOKEN", token)
 	var out, errb bytes.Buffer
-	code = run(t.Context(), args, &out, &errb)
+	code = Run(t.Context(), args, &out, &errb)
 	return code, out.String(), errb.String()
 }
 

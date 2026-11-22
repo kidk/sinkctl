@@ -27,6 +27,11 @@ type Tabular interface {
 	Table() (header []string, rows [][]string)
 }
 
+// Texter values print as raw text in table mode.
+type Texter interface {
+	Text() string
+}
+
 func ParseFormat(s string) (Format, error) {
 	switch f := Format(s); f {
 	case Auto, JSON, YAML, Table:
@@ -59,6 +64,10 @@ func Write(w io.Writer, f Format, v any) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(v)
 	case Table:
+		if t, ok := v.(Texter); ok {
+			_, err := io.WriteString(w, t.Text())
+			return err
+		}
 		if t, ok := v.(Tabular); ok {
 			return writeTable(w, t)
 		}
@@ -69,13 +78,31 @@ func Write(w io.Writer, f Format, v any) error {
 	return fmt.Errorf("unresolved output format %q", f)
 }
 
+// writeYAML goes through JSON so json tags and MarshalJSON apply (API types have no yaml tags).
 func writeYAML(w io.Writer, v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	var n yaml.Node
+	if err := yaml.Unmarshal(b, &n); err != nil {
+		return err
+	}
+	blockStyle(&n)
 	enc := yaml.NewEncoder(w)
 	enc.SetIndent(2)
-	if err := enc.Encode(v); err != nil {
+	if err := enc.Encode(&n); err != nil {
 		return err
 	}
 	return enc.Close()
+}
+
+// blockStyle drops the flow/quoted styles parsed from JSON; the encoder still quotes where needed.
+func blockStyle(n *yaml.Node) {
+	n.Style = 0
+	for _, c := range n.Content {
+		blockStyle(c)
+	}
 }
 
 func writeTable(w io.Writer, t Tabular) error {

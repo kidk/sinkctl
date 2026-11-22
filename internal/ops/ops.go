@@ -11,7 +11,7 @@ import (
 
 // Ops runs operations against one Bugsink instance.
 type Ops struct {
-	api *bugsink.ClientWithResponses //nolint:unused // used by the first API op
+	api *bugsink.ClientWithResponses
 }
 
 func New(c config.Context, hc *http.Client) (*Ops, error) {

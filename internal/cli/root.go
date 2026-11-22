@@ -66,25 +66,17 @@ func usageArgs(fn cobra.PositionalArgs) cobra.PositionalArgs {
 }
 
 func newRootCmd(g *globals) *cobra.Command {
-	root := &cobra.Command{
-		Use:           "sinkctl",
-		Short:         "CLI and MCP server for Bugsink",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		// RunE + ArbitraryArgs so unknown subcommands land here and get a usage exit code
-		Args: cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) > 0 {
-				return usageErr(fmt.Errorf("unknown command %q for %q", args[0], cmd.CommandPath()))
-			}
-			return cmd.Help()
-		},
-	}
+	root := groupCmd("sinkctl", "CLI and MCP server for Bugsink")
+	root.SilenceUsage = true
+	root.SilenceErrors = true
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageErr(err) })
 	root.PersistentFlags().StringVar(&g.context, "context", "", "config context to use (default: current-context)")
 	root.PersistentFlags().StringVarP(&g.output, "output", "o", string(output.Auto), "output format: auto, json, yaml, table")
 
 	root.AddCommand(
+		newProjectsCmd(g),
+		newIssuesCmd(g),
+		newEventsCmd(g),
 		&cobra.Command{
 			Use:   "version",
 			Short: "Show build information",
@@ -117,7 +109,8 @@ var exitCodes = map[ops.Kind]int{
 	ops.KindNetwork:  5,
 }
 
-func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+// Run executes args and returns the exit code; Execute wires it to the process.
+func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	g := &globals{}
 	root := newRootCmd(g)
 	root.SetArgs(args)
@@ -149,5 +142,5 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 // Execute runs the CLI and returns the process exit code.
 func Execute(ctx context.Context) int {
-	return run(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	return Run(ctx, os.Args[1:], os.Stdout, os.Stderr)
 }

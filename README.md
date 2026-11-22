@@ -3,7 +3,7 @@
 Command-line client and MCP server for [Bugsink](https://www.bugsink.com), built on
 Bugsink's canonical REST API (`/api/canonical/0/`).
 
-> **Status:** early development. Only `version` and `mcp` exist so far.
+> **Status:** early development. Read-only commands for projects, issues and events.
 
 ## Install
 
@@ -53,6 +53,26 @@ contexts:
 
 Pick a context per command with `--context staging`. `BUGSINK_URL` and
 `BUGSINK_TOKEN` override values from the selected context.
+
+## Commands
+
+| Command | MCP tool |
+|---|---|
+| `projects list [--team UUID]` | `projects_list` |
+| `projects get <id>` | `projects_get` |
+| `projects event-counts <id> [--start T] [--end T]` | `projects_event_counts` |
+| `issues list [--project N] [-q TEXT] [--state S] [--sort S] [--order asc\|desc]` | `issues_list` |
+| `issues get <uuid\|friendly-id>` | `issues_get` |
+| `issues event-counts <id> [--start T] [--end T]` | `issues_event_counts` |
+| `events list --issue UUID [-q TEXT] [--order asc\|desc]` | `events_list` |
+| `events get <uuid>` | `events_get` |
+| `events stacktrace <uuid>` | `events_stacktrace` |
+| `events lookup --project N --event-id UUID` | `events_lookup` |
+
+List commands return one page plus `next_cursor`; pass it back with `--cursor`
+(MCP: `cursor`). The CLI also has `--all` to follow every page. Times are RFC 3339
+UTC hours, like `2026-01-02T15:00:00Z`. `events stacktrace` prints Markdown in a
+terminal.
 
 ## Output
 
