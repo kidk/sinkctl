@@ -86,6 +86,28 @@ func TestTokenRedacted(t *testing.T) {
 	}
 }
 
+func TestSaveRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sinkctl", "config.yaml")
+	want := &Config{CurrentContext: "prod", Contexts: map[string]Context{"prod": {"https://x", "secret"}}}
+	if err := want.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Mode().Perm() != 0o600 {
+		t.Errorf("mode = %v", st.Mode().Perm())
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CurrentContext != "prod" || got.Contexts["prod"].Token != "secret" {
+		t.Errorf("got %+v", got)
+	}
+}
+
 func TestResolveEnvOnly(t *testing.T) {
 	got, err := (&Config{}).Resolve("", env(map[string]string{EnvURL: "https://x", EnvToken: "t"}))
 	if err != nil {

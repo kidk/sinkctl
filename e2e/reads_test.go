@@ -19,7 +19,7 @@ func sinkctl(t *testing.T, args ...string) (code int, stdout, stderr string) {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // creds only from env
 	var out, errb bytes.Buffer
-	code = cli.Run(t.Context(), args, &out, &errb)
+	code = cli.Run(t.Context(), args, strings.NewReader(""), &out, &errb)
 	return code, out.String(), errb.String()
 }
 

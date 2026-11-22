@@ -37,11 +37,7 @@ func (g *globals) print(cmd *cobra.Command, v any) error {
 
 // ops resolves --context plus env into a client; built per command so `version` needs no creds.
 func (g *globals) ops() (*ops.Ops, error) {
-	path, err := config.DefaultPath()
-	if err != nil {
-		return nil, err
-	}
-	cfg, err := config.Load(path)
+	_, cfg, err := loadConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +45,19 @@ func (g *globals) ops() (*ops.Ops, error) {
 	if err != nil {
 		return nil, &ops.Error{Kind: ops.KindAuth, Message: err.Error()}
 	}
-	return ops.New(c, &http.Client{Timeout: 30 * time.Second})
+	return ops.New(c, httpClient())
+}
+
+func loadConfig() (path string, cfg *config.Config, err error) {
+	if path, err = config.DefaultPath(); err != nil {
+		return "", nil, err
+	}
+	cfg, err = config.Load(path)
+	return path, cfg, err
+}
+
+func httpClient() *http.Client {
+	return &http.Client{Timeout: 30 * time.Second}
 }
 
 func usageErr(err error) error {
@@ -77,6 +85,7 @@ func newRootCmd(g *globals) *cobra.Command {
 		newProjectsCmd(g),
 		newIssuesCmd(g),
 		newEventsCmd(g),
+		newConfigCmd(g),
 		&cobra.Command{
 			Use:   "version",
 			Short: "Show build information",
@@ -110,10 +119,11 @@ var exitCodes = map[ops.Kind]int{
 }
 
 // Run executes args and returns the exit code; Execute wires it to the process.
-func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	g := &globals{}
 	root := newRootCmd(g)
 	root.SetArgs(args)
+	root.SetIn(stdin)
 	root.SetOut(stdout)
 	root.SetErr(stderr)
 
@@ -142,5 +152,5 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 // Execute runs the CLI and returns the process exit code.
 func Execute(ctx context.Context) int {
-	return Run(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	return Run(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
 }

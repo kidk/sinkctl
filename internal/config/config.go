@@ -35,7 +35,7 @@ func (c Context) redacted() redactedContext {
 	return r
 }
 
-// token is redacted whenever a Context is rendered; writing config.yaml needs a separate type
+// token is redacted whenever a Context is rendered; Save uses fileConfig to keep it
 func (c Context) MarshalJSON() ([]byte, error) { return json.Marshal(c.redacted()) }
 
 func (c Context) MarshalYAML() (any, error) { return c.redacted(), nil }
@@ -43,6 +43,47 @@ func (c Context) MarshalYAML() (any, error) { return c.redacted(), nil }
 type Config struct {
 	CurrentContext string             `yaml:"current-context"`
 	Contexts       map[string]Context `yaml:"contexts"`
+}
+
+// fileConfig mirrors Config without Context's redacting marshalers.
+type fileConfig struct {
+	CurrentContext string                 `yaml:"current-context"`
+	Contexts       map[string]fileContext `yaml:"contexts"`
+}
+
+type fileContext struct {
+	URL   string `yaml:"url"`
+	Token string `yaml:"token"`
+}
+
+// Save writes c to path with mode 0600; temp file + rename so a crash never leaves it half-written.
+// Comments in an existing file are not preserved.
+func (c *Config) Save(path string) error {
+	f := fileConfig{CurrentContext: c.CurrentContext, Contexts: map[string]fileContext{}}
+	for name, ctx := range c.Contexts {
+		f.Contexts[name] = fileContext(ctx)
+	}
+	b, err := yaml.Marshal(f)
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".config-*.yaml") // created 0600
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name()) //nolint:errcheck // no-op after a successful rename
+	if _, err := tmp.Write(b); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 // DefaultPath is $XDG_CONFIG_HOME/sinkctl/config.yaml, else ~/.config/sinkctl/config.yaml.

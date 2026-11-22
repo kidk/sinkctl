@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -19,11 +20,17 @@ func execAPI(t *testing.T, url string, args ...string) (code int, stdout, stderr
 	if url != "" {
 		token = "tok"
 	}
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("BUGSINK_URL", url)
 	t.Setenv("BUGSINK_TOKEN", token)
+	return execIn(t, t.TempDir(), "", args...)
+}
+
+// execIn runs with config under xdg and the given stdin.
+func execIn(t *testing.T, xdg, stdin string, args ...string) (code int, stdout, stderr string) {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", xdg)
 	var out, errb bytes.Buffer
-	code = Run(t.Context(), args, &out, &errb)
+	code = Run(t.Context(), args, strings.NewReader(stdin), &out, &errb)
 	return code, out.String(), errb.String()
 }
 
