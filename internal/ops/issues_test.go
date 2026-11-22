@@ -25,6 +25,11 @@ func TestListIssuesParams(t *testing.T) {
 	}
 }
 
+func TestListIssuesBadEnum(t *testing.T) {
+	_, err := unreachable(t).ListIssues(t.Context(), ListIssuesIn{State: "opne"})
+	wantKind(t, err, KindUsage)
+}
+
 func TestGetIssueRequiresID(t *testing.T) {
 	_, err := unreachable(t).GetIssue(t.Context(), GetIssueIn{})
 	wantKind(t, err, KindUsage)

@@ -111,10 +111,24 @@ func TestStacktraceText(t *testing.T) {
 	}
 }
 
-func TestToolErr(t *testing.T) {
-	err := toolErr(&ops.Error{Kind: ops.KindNotFound, Message: "issue 9 not found", Status: 404})
+func TestEnvelope(t *testing.T) {
+	got := envelope(&ops.Error{Kind: ops.KindNotFound, Message: "issue 9 not found", Status: 404})
 	want := `{"error":{"kind":"not_found","message":"issue 9 not found","status":404}}`
-	if err.Error() != want {
-		t.Errorf("got %s, want %s", err, want)
+	if got != want {
+		t.Errorf("got %s, want %s", got, want)
+	}
+}
+
+func TestMissingArgIsUsage(t *testing.T) {
+	res := call(t, connect(t, nil), "events_get", map[string]any{})
+	if !res.IsError || !strings.HasPrefix(text(res), `{"error":{"kind":"usage",`) {
+		t.Errorf("result = %s", text(res))
+	}
+}
+
+func TestOpsUsageKept(t *testing.T) {
+	res := call(t, connect(t, nil), "events_get", map[string]any{"id": "nope"})
+	if !strings.Contains(text(res), `"kind":"usage"`) || !strings.Contains(text(res), "invalid UUID") {
+		t.Errorf("result = %s", text(res))
 	}
 }

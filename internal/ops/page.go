@@ -2,6 +2,7 @@ package ops
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 )
 
@@ -22,20 +23,21 @@ func (p Page[T]) Table() ([]string, [][]string) {
 	return p.header, rows
 }
 
-func newPage[T any](results []T, next *string, header []string, row func(T) []string) Page[T] {
-	return Page[T]{Results: results, NextCursor: cursorOf(next), header: header, row: row}
+func newPage[T any](results []T, next *string, header []string, row func(T) []string) (Page[T], error) {
+	c, err := cursorOf(next)
+	return Page[T]{Results: results, NextCursor: c, header: header, row: row}, err
 }
 
-// cursorOf extracts the cursor query param from the API's next URL.
-func cursorOf(next *string) string {
+// cursorOf extracts the cursor query param from the API's next URL; errors so --all never returns a silent partial list.
+func cursorOf(next *string) (string, error) {
 	if next == nil {
-		return ""
+		return "", nil
 	}
 	u, err := url.Parse(*next)
-	if err != nil {
-		return ""
+	if err == nil && u.Query().Get("cursor") != "" {
+		return u.Query().Get("cursor"), nil
 	}
-	return u.Query().Get("cursor")
+	return "", &Error{Kind: KindAPI, Message: fmt.Sprintf("next page URL has no cursor: %q", *next)}
 }
 
 // All follows next cursors from cursor until the last page.

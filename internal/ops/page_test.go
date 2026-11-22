@@ -40,6 +40,14 @@ func TestAllFollowsCursors(t *testing.T) {
 	}
 }
 
+func TestNextWithoutCursor(t *testing.T) {
+	o := fake(t, func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"next":"http://x/?page=2","results":[]}`)
+	})
+	_, err := o.ListProjects(t.Context(), ListProjectsIn{})
+	wantKind(t, err, KindAPI)
+}
+
 func TestAllStopsOnError(t *testing.T) {
 	o := fake(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("cursor") == "c2" {

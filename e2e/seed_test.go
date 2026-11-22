@@ -25,6 +25,8 @@ import (
 	"github.com/kidk/sinkctl/internal/ops"
 )
 
+var httpClient = &http.Client{Timeout: 30 * time.Second}
+
 // data created once by TestMain and read by every test
 var seed struct {
 	ops        *ops.Ops
@@ -36,7 +38,10 @@ var seed struct {
 }
 
 func TestMain(m *testing.M) {
-	if err := seedData(context.Background()); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	err := seedData(ctx)
+	cancel()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "e2e seed:", err)
 		os.Exit(1)
 	}
@@ -48,11 +53,11 @@ func seedData(ctx context.Context) error {
 	if c.URL == "" || c.Token == "" {
 		return errors.New("BUGSINK_URL and BUGSINK_TOKEN must be set")
 	}
-	api, err := ops.NewClient(c, http.DefaultClient)
+	api, err := ops.NewClient(c, httpClient)
 	if err != nil {
 		return err
 	}
-	if seed.ops, err = ops.New(c, http.DefaultClient); err != nil {
+	if seed.ops, err = ops.New(c, httpClient); err != nil {
 		return err
 	}
 
@@ -127,7 +132,7 @@ func storeEvent(ctx context.Context, dsn, eventID string) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	res, err := http.DefaultClient.Do(req)
+	res, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}

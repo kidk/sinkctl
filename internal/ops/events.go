@@ -25,17 +25,24 @@ func (o *Ops) ListEvents(ctx context.Context, in ListEventsIn) (Page[bugsink.Eve
 	if in.Issue == "" {
 		return Page[bugsink.EventList]{}, usagef("issue is required")
 	}
+	order, err := optEnum[bugsink.EventsListParamsOrder]("order", in.Order, "asc or desc")
+	if err != nil {
+		return Page[bugsink.EventList]{}, err
+	}
 	res, err := o.api.EventsListWithResponse(ctx, &bugsink.EventsListParams{
 		Issue:  in.Issue,
 		Q:      ptr(in.Query),
-		Order:  ptr(bugsink.EventsListParamsOrder(in.Order)),
+		Order:  order,
 		Cursor: ptr(in.Cursor),
 	})
 	if err != nil {
 		return Page[bugsink.EventList]{}, transportErr("events", err)
 	}
-	v, err := decoded("events", res.StatusCode(), res.Body, res.JSON200)
-	return newPage(v.Results, v.Next, eventHeader, eventRow), err
+	v, err := decoded("events", res.HTTPResponse, res.Body, res.JSON200)
+	if err != nil {
+		return Page[bugsink.EventList]{}, err
+	}
+	return newPage(v.Results, v.Next, eventHeader, eventRow)
 }
 
 type GetEventIn struct {
@@ -61,7 +68,7 @@ func (o *Ops) GetEvent(ctx context.Context, in GetEventIn) (Event, error) {
 	if err != nil {
 		return Event{}, transportErr(what, err)
 	}
-	v, err := decoded(what, res.StatusCode(), res.Body, res.JSON200)
+	v, err := decoded(what, res.HTTPResponse, res.Body, res.JSON200)
 	return Event{v}, err
 }
 
@@ -81,9 +88,10 @@ func (o *Ops) EventStacktrace(ctx context.Context, in GetEventIn) (Stacktrace, e
 	if err != nil {
 		return Stacktrace{}, transportErr(what, err)
 	}
-	body := string(res.Body)
-	body, err = decoded(what, res.StatusCode(), res.Body, &body)
-	return Stacktrace{body}, err
+	if err := statusErr(what, res.HTTPResponse, res.Body); err != nil {
+		return Stacktrace{}, err
+	}
+	return Stacktrace{string(res.Body)}, nil
 }
 
 type LookupEventIn struct {
@@ -104,6 +112,6 @@ func (o *Ops) LookupEvent(ctx context.Context, in LookupEventIn) (Event, error) 
 	if err != nil {
 		return Event{}, transportErr(what, err)
 	}
-	v, err := decoded(what, res.StatusCode(), res.Body, res.JSON200)
+	v, err := decoded(what, res.HTTPResponse, res.Body, res.JSON200)
 	return Event{v}, err
 }

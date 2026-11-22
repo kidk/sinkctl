@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/google/uuid"
 )
@@ -16,18 +17,28 @@ func transportErr(what string, err error) error {
 	return &Error{Kind: KindNetwork, Message: fmt.Sprintf("%s: %v", what, err)}
 }
 
+// statusErr is HTTPError with what prefixed to the message.
+func statusErr(what string, res *http.Response, body []byte) error {
+	err := HTTPError(res.StatusCode, body)
+	var e *Error
+	if errors.As(err, &e) {
+		e.Message = what + ": " + e.Message
+	}
+	return err
+}
+
 // decoded checks status, then returns the decoded 200 body.
-func decoded[T any](what string, status int, body []byte, v *T) (T, error) {
+func decoded[T any](what string, res *http.Response, body []byte, v *T) (T, error) {
 	var zero T
-	if err := HTTPError(status, body); err != nil {
-		var e *Error
-		if errors.As(err, &e) {
-			e.Message = what + ": " + e.Message
-		}
+	if err := statusErr(what, res, body); err != nil {
 		return zero, err
 	}
 	if v == nil {
-		return zero, &Error{Kind: KindAPI, Message: fmt.Sprintf("%s: unexpected response body", what), Status: status}
+		return zero, &Error{
+			Kind:    KindAPI,
+			Message: fmt.Sprintf("%s: unexpected response body (%s): %s", what, res.Header.Get("Content-Type"), snippet(body)),
+			Status:  res.StatusCode,
+		}
 	}
 	return *v, nil
 }
@@ -51,4 +62,19 @@ func ptr[T comparable](v T) *T {
 		return nil
 	}
 	return &v
+}
+
+// optEnum is ptr for a generated enum, rejecting values the API would 400 on.
+func optEnum[T interface {
+	~string
+	Valid() bool
+}](field, v, allowed string) (*T, error) {
+	if v == "" {
+		return nil, nil
+	}
+	e := T(v)
+	if !e.Valid() {
+		return nil, usagef("%s: invalid value %q; want %s", field, v, allowed)
+	}
+	return &e, nil
 }

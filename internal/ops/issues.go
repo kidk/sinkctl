@@ -41,19 +41,34 @@ func issueState(i bugsink.Issue) string {
 }
 
 func (o *Ops) ListIssues(ctx context.Context, in ListIssuesIn) (Page[bugsink.Issue], error) {
+	state, err := optEnum[bugsink.IssuesListParamsState]("state", in.State, "all, open, unresolved, resolved or muted")
+	if err != nil {
+		return Page[bugsink.Issue]{}, err
+	}
+	sort, err := optEnum[bugsink.IssuesListParamsSort]("sort", in.Sort, "digest_order, digested_event_count or last_seen")
+	if err != nil {
+		return Page[bugsink.Issue]{}, err
+	}
+	order, err := optEnum[bugsink.IssuesListParamsOrder]("order", in.Order, "asc or desc")
+	if err != nil {
+		return Page[bugsink.Issue]{}, err
+	}
 	res, err := o.api.IssuesListWithResponse(ctx, &bugsink.IssuesListParams{
 		Project: ptr(in.Project),
 		Q:       ptr(in.Query),
-		State:   ptr(bugsink.IssuesListParamsState(in.State)),
-		Sort:    ptr(bugsink.IssuesListParamsSort(in.Sort)),
-		Order:   ptr(bugsink.IssuesListParamsOrder(in.Order)),
+		State:   state,
+		Sort:    sort,
+		Order:   order,
 		Cursor:  ptr(in.Cursor),
 	})
 	if err != nil {
 		return Page[bugsink.Issue]{}, transportErr("issues", err)
 	}
-	v, err := decoded("issues", res.StatusCode(), res.Body, res.JSON200)
-	return newPage(v.Results, v.Next, issueHeader, issueRow), err
+	v, err := decoded("issues", res.HTTPResponse, res.Body, res.JSON200)
+	if err != nil {
+		return Page[bugsink.Issue]{}, err
+	}
+	return newPage(v.Results, v.Next, issueHeader, issueRow)
 }
 
 type GetIssueIn struct {
@@ -75,7 +90,7 @@ func (o *Ops) GetIssue(ctx context.Context, in GetIssueIn) (Issue, error) {
 	if err != nil {
 		return Issue{}, transportErr(what, err)
 	}
-	v, err := decoded(what, res.StatusCode(), res.Body, res.JSON200)
+	v, err := decoded(what, res.HTTPResponse, res.Body, res.JSON200)
 	return Issue{v}, err
 }
 
@@ -99,6 +114,6 @@ func (o *Ops) IssueEventCounts(ctx context.Context, in IssueEventCountsIn) (Even
 	if err != nil {
 		return EventCounts{}, transportErr(what, err)
 	}
-	v, err := decoded(what, res.StatusCode(), res.Body, res.JSON200)
+	v, err := decoded(what, res.HTTPResponse, res.Body, res.JSON200)
 	return EventCounts{v}, err
 }

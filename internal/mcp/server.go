@@ -18,6 +18,7 @@ import (
 // NewServer registers all tools; API tools call o.
 func NewServer(o *ops.Ops) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "sinkctl", Version: version.Version}, nil)
+	s.AddReceivingMiddleware(errorEnvelope)
 	addTool(s, "version", "Show sinkctl build information",
 		func(context.Context, struct{}) (ops.VersionInfo, error) { return ops.Version(), nil })
 
@@ -51,7 +52,7 @@ func addTool[In, Out any](s *mcp.Server, name, desc string, h func(context.Conte
 	mcp.AddTool(s, t, func(ctx context.Context, _ *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
 		v, err := h(ctx, in)
 		if err != nil {
-			return nil, v, toolErr(err)
+			return nil, v, asOpsErr(err)
 		}
 		if tx, ok := any(v).(interface{ Text() string }); ok {
 			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: tx.Text()}}}, v, nil
@@ -60,15 +61,34 @@ func addTool[In, Out any](s *mcp.Server, name, desc string, h func(context.Conte
 	})
 }
 
-// toolErr puts the CLI's JSON error envelope in the tool error text; the SDK sets IsError.
-func toolErr(err error) error {
+// asOpsErr tags handler errors so errorEnvelope can tell them from SDK argument errors.
+func asOpsErr(err error) error {
+	var e *ops.Error
+	if errors.As(err, &e) {
+		return err
+	}
+	return &ops.Error{Kind: ops.KindError, Message: err.Error()}
+}
+
+// errorEnvelope rewrites tool errors as the CLI's JSON envelope; untagged ones are SDK argument validation, so usage.
+func errorEnvelope(next mcp.MethodHandler) mcp.MethodHandler {
+	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+		res, err := next(ctx, method, req)
+		if r, ok := res.(*mcp.CallToolResult); ok && r.IsError && r.GetError() != nil {
+			r.Content = []mcp.Content{&mcp.TextContent{Text: envelope(r.GetError())}}
+		}
+		return res, err
+	}
+}
+
+func envelope(err error) string {
 	var e *ops.Error
 	if !errors.As(err, &e) {
-		return err
+		e = &ops.Error{Kind: ops.KindUsage, Message: err.Error()}
 	}
 	b, mErr := json.Marshal(map[string]*ops.Error{"error": e})
 	if mErr != nil {
-		return err
+		return err.Error()
 	}
-	return errors.New(string(b))
+	return string(b)
 }

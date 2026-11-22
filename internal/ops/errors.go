@@ -39,11 +39,16 @@ func HTTPError(status int, body []byte) error {
 		kind = KindNotFound
 	}
 	msg := fmt.Sprintf("%d %s", status, http.StatusText(status))
-	if b := strings.TrimSpace(string(body)); b != "" {
-		if len(b) > 500 {
-			b = b[:500] + "..."
-		}
+	if b := snippet(body); b != "" {
 		msg += ": " + b
 	}
 	return &Error{Kind: kind, Message: msg, Status: status}
+}
+
+func snippet(body []byte) string {
+	b := strings.TrimSpace(string(body))
+	if len(b) > 500 {
+		b = b[:500] + "..."
+	}
+	return b
 }

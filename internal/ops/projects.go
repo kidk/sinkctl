@@ -31,8 +31,11 @@ func (o *Ops) ListProjects(ctx context.Context, in ListProjectsIn) (Page[bugsink
 	if err != nil {
 		return Page[bugsink.ProjectList]{}, transportErr("projects", err)
 	}
-	v, err := decoded("projects", res.StatusCode(), res.Body, res.JSON200)
-	return newPage(v.Results, v.Next, projectHeader, projectRow), err
+	v, err := decoded("projects", res.HTTPResponse, res.Body, res.JSON200)
+	if err != nil {
+		return Page[bugsink.ProjectList]{}, err
+	}
+	return newPage(v.Results, v.Next, projectHeader, projectRow)
 }
 
 type GetProjectIn struct {
@@ -53,7 +56,7 @@ func (o *Ops) GetProject(ctx context.Context, in GetProjectIn) (Project, error) 
 	if err != nil {
 		return Project{}, transportErr(what, err)
 	}
-	v, err := decoded(what, res.StatusCode(), res.Body, res.JSON200)
+	v, err := decoded(what, res.HTTPResponse, res.Body, res.JSON200)
 	return Project{v}, err
 }
 
@@ -74,6 +77,6 @@ func (o *Ops) ProjectEventCounts(ctx context.Context, in ProjectEventCountsIn) (
 	if err != nil {
 		return EventCounts{}, transportErr(what, err)
 	}
-	v, err := decoded(what, res.StatusCode(), res.Body, res.JSON200)
+	v, err := decoded(what, res.HTTPResponse, res.Body, res.JSON200)
 	return EventCounts{v}, err
 }

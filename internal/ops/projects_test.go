@@ -42,6 +42,17 @@ func TestGetProjectNotFound(t *testing.T) {
 	}
 }
 
+func TestUnexpectedBodySnippet(t *testing.T) {
+	o := fake(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, "<!doctype html>login")
+	})
+	_, err := o.GetProject(t.Context(), GetProjectIn{ID: 1})
+	if err == nil || !strings.Contains(err.Error(), "(text/html): <!doctype html>login") {
+		t.Errorf("err = %v", err)
+	}
+}
+
 func TestProjectEventCounts(t *testing.T) {
 	o := fake(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/canonical/0/projects/3/event-counts/" || r.URL.Query().Get("start") != "2026-01-02T15:00:00Z" {
