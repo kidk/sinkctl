@@ -1,0 +1,32 @@
+version: "2"
+
+run:
+  build-tags: [e2e]
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - gosec
+    - misspell
+    - noctx
+    - revive
+  exclusions:
+    presets:
+      - comments
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters: [gosec]
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    gofumpt:
+      module-path: github.com/kidk/sinkctl
+    goimports:
+      local-prefixes:
+        - github.com/kidk/sinkctl

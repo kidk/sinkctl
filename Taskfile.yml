@@ -1,0 +1,107 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+vars:
+  BUGSINK_IMAGE:
+    sh: sed -n 's/^FROM //p' e2e/Dockerfile
+  BUGSINK_CONTAINER: sinkctl-bugsink
+  BUGSINK_URL: http://127.0.0.1:18000
+  # own module: its deps conflict with oapi-codegen's and it needs a newer Go
+  GORELEASER: bin/goreleaser
+
+tasks:
+  default:
+    cmds: [task --list]
+    silent: true
+
+  build:
+    desc: Build ./bin/sinkctl
+    cmds: [go build -o bin/sinkctl ./cmd/sinkctl]
+
+  test:
+    desc: Run unit tests
+    cmds: [go test -race ./...]
+
+  lint:
+    desc: Run golangci-lint
+    cmds: [golangci-lint run ./...]
+
+  generate:
+    desc: Regenerate the Bugsink client from api/openapi.yaml
+    cmds: [go tool oapi-codegen -config oapi-codegen.yaml api/openapi.yaml]
+
+  schema:
+    desc: Fetch api/openapi.yaml from the pinned Bugsink image, then regenerate
+    cmds:
+      - task: bugsink:up
+      - defer: { task: bugsink:down }
+      - task: schema:fetch
+
+  e2e:
+    desc: Run e2e tests against the pinned Bugsink image
+    cmds:
+      - task: bugsink:up
+      - defer: { task: bugsink:down }
+      - task: e2e:run
+
+  e2e:ci:
+    desc: Refresh schema and run e2e on one container (CI checks git diff after)
+    cmds:
+      - task: bugsink:up
+      - defer: { task: bugsink:down }
+      - task: schema:fetch
+      - task: e2e:run
+
+  snapshot:
+    desc: Local goreleaser build into ./dist (no publish, signing or SBOM)
+    deps: [goreleaser]
+    cmds: ["{{.GORELEASER}} release --snapshot --clean --skip=sign,sbom"]
+
+  release:check:
+    desc: Validate .goreleaser.yaml
+    deps: [goreleaser]
+    cmds: ["{{.GORELEASER}} check"]
+
+  goreleaser:
+    internal: true
+    sources: [tools/go.mod, tools/go.sum]
+    generates: ["{{.GORELEASER}}"]
+    cmds: ["go -C tools build -o ../{{.GORELEASER}} github.com/goreleaser/goreleaser/v2"]
+
+  schema:fetch:
+    internal: true
+    cmds:
+      - curl -fsS {{.BUGSINK_URL}}/api/canonical/0/schema/ -o api/openapi.yaml
+      - task: generate
+
+  e2e:run:
+    internal: true
+    cmds:
+      - |
+        BUGSINK_TOKEN="$(docker exec {{.BUGSINK_CONTAINER}} bugsink-manage create_auth_token | tail -n1)" \
+        BUGSINK_URL={{.BUGSINK_URL}} \
+        go test -tags e2e -count=1 ./e2e/...
+
+  bugsink:up:
+    internal: true
+    cmds:
+      - docker rm -f {{.BUGSINK_CONTAINER}} >/dev/null 2>&1 || true
+      - |
+        docker run -d --rm --name {{.BUGSINK_CONTAINER}} \
+          -e SECRET_KEY="$(openssl rand -hex 32)" \
+          -e CREATE_SUPERUSER=admin@example.org:admin \
+          -e PORT=8000 \
+          -p 127.0.0.1:18000:8000 \
+          {{.BUGSINK_IMAGE}} >/dev/null
+      - |
+        for _ in $(seq 60); do
+          curl -fsS -o /dev/null {{.BUGSINK_URL}}/api/canonical/0/schema/ 2>/dev/null && exit 0
+          sleep 1
+        done
+        docker logs {{.BUGSINK_CONTAINER}}
+        exit 1
+
+  bugsink:down:
+    internal: true
+    cmds:
+      - docker rm -f {{.BUGSINK_CONTAINER}} >/dev/null

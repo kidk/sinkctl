@@ -1,0 +1,29 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directories: [/, /tools]
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      go:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Pinned Bugsink version for e2e + schema. After a bump, run `task schema` and commit.
+  - package-ecosystem: docker
+    directory: /e2e
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)

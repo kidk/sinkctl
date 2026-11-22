@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/v2.8.2/configuration-schema.json
+# Typed client for Bugsink's canonical API. Sentry-compat endpoints are excluded.
+package: bugsink
+output: internal/bugsink/client.gen.go
+generate:
+  models: true
+  client: true
+output-options:
+  exclude-tags:
+    - Sentry-compatible API
+    - CSP reporting
