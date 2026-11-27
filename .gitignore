@@ -2,5 +2,6 @@
 /dist/
 /.tmp/
 /.task/
+/result
 *.test
 *.out

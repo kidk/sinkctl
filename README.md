@@ -14,6 +14,28 @@ Download a binary for your platform from
 go install github.com/kidk/sinkctl/cmd/sinkctl@latest
 ```
 
+### Nix
+
+```sh
+nix run github:kidk/sinkctl -- version
+```
+
+In a flake, add the input and use the package or the overlay:
+
+```nix
+inputs.sinkctl = {
+  url = "github:kidk/sinkctl"; # or pin a tag: github:kidk/sinkctl/vX.Y.Z (flake exists from v0.1.1)
+  inputs.nixpkgs.follows = "nixpkgs";
+};
+
+# packages
+environment.systemPackages = [ inputs.sinkctl.packages.${pkgs.stdenv.hostPlatform.system}.default ];
+# or: nixpkgs.overlays = [ inputs.sinkctl.overlays.default ]; then pkgs.sinkctl
+```
+
+Nix builds report version `dev` plus the exact commit. `follows` needs a nixpkgs
+with Go 1.26 or newer.
+
 ### Verify a release
 
 Each release ships `checksums.txt`, signed keylessly with cosign, an SBOM per
