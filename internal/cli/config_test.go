@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/kidk/sinkctl/internal/config"
 )
 
@@ -16,6 +18,7 @@ func loginAPI(t *testing.T) string {
 	return fakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer good" {
 			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprint(w, `{"detail":"Authentication credentials were not provided."}`)
 			return
 		}
 		fmt.Fprint(w, `{"results":[]}`)
@@ -79,14 +82,98 @@ func TestConfigErrors(t *testing.T) {
 	cases := []struct {
 		args []string
 		code int
+		want string // in stderr
 	}{
-		{[]string{"config", "login", "prod", "--url", "http://x"}, 2}, // non-TTY stdin, no --token-stdin
-		{[]string{"config", "login", "prod", "--token-stdin"}, 2},
-		{[]string{"config", "use", "nope"}, 3},
+		{[]string{"config", "login", "prod", "--url", "http://x"}, 2, "--token-stdin"}, // non-TTY stdin
+		{[]string{"config", "login", "prod", "--token-stdin"}, 2, "--url is required"},
+		{[]string{"config", "login", "--url", "http://x", "--token-stdin"}, 2, "name is required"},
+		{[]string{"config", "login"}, 2, "--url is required"},
+		{[]string{"config", "use", "nope"}, 3, "not found"},
 	}
 	for _, c := range cases {
-		if code, _, stderr := execIn(t, t.TempDir(), "tok\n", c.args...); code != c.code {
-			t.Errorf("%v: exit %d, want %d: %s", c.args, code, c.code, stderr)
+		code, _, stderr := execIn(t, t.TempDir(), "tok\n", c.args...)
+		if code != c.code || !strings.Contains(stderr, c.want) {
+			t.Errorf("%v: exit %d, want %d with %q: %s", c.args, code, c.code, c.want, stderr)
 		}
+	}
+}
+
+// fakeTTY makes login prompt as on a terminal; the hidden token prompt reads the next stdin line.
+func fakeTTY(t *testing.T) {
+	orig := newPrompter
+	t.Cleanup(func() { newPrompter = orig })
+	newPrompter = func(cmd *cobra.Command) *prompter {
+		p := orig(cmd)
+		p.tty = true
+		p.password = func() (string, error) { return p.r.ReadString('\n') }
+		return p
+	}
+}
+
+func TestGuidedLogin(t *testing.T) {
+	noEnv(t)
+	fakeTTY(t)
+	xdg, url := t.TempDir(), loginAPI(t)
+
+	// Enter at the name prompt takes the URL host.
+	code, out, stderr := execIn(t, xdg, url+"/\n\ngood\n", "config", "login")
+	if code != 0 || !strings.Contains(stderr, "Context name [127.0.0.1]: ") {
+		t.Fatalf("exit %d: %s %s", code, out, stderr)
+	}
+	if c := loadIn(t, xdg); c.CurrentContext != "127.0.0.1" || c.Contexts["127.0.0.1"] != (config.Context{URL: url, Token: "good"}) {
+		t.Fatalf("config = %+v", c)
+	}
+}
+
+func TestGuidedLoginPromptsOnlyMissing(t *testing.T) {
+	noEnv(t)
+	fakeTTY(t)
+	xdg := t.TempDir()
+	code, _, stderr := execIn(t, xdg, "good\n", "config", "login", "prod", "--url", loginAPI(t))
+	if code != 0 || strings.Contains(stderr, "URL:") || strings.Contains(stderr, "Context name") || !strings.Contains(stderr, "Token: ") {
+		t.Fatalf("exit %d: %s", code, stderr)
+	}
+	if c := loadIn(t, xdg); c.CurrentContext != "prod" {
+		t.Fatalf("config = %+v", c)
+	}
+}
+
+func TestGuidedLoginRetries(t *testing.T) {
+	noEnv(t)
+	fakeTTY(t)
+	xdg, url := t.TempDir(), loginAPI(t)
+	notBugsink := fakeAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, "<html>nope</html>")
+	})
+
+	stdin := "http://127.0.0.1:1\n" + notBugsink + "\n" + url + "\nprod\nbad\ngood\n"
+	code, _, stderr := execIn(t, xdg, stdin, "config", "login")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr)
+	}
+	for _, want := range []string{"cannot reach http://127.0.0.1:1", "does not look like Bugsink", "401 Unauthorized"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr lacks %q: %s", want, stderr)
+		}
+	}
+	if c := loadIn(t, xdg); c.Contexts["prod"].Token != "good" {
+		t.Fatalf("config = %+v", c)
+	}
+}
+
+func TestGuidedLoginGivesUpAfterThreeTokens(t *testing.T) {
+	noEnv(t)
+	fakeTTY(t)
+	xdg := t.TempDir()
+	code, _, stderr := execIn(t, xdg, loginAPI(t)+"\nprod\nbad\nbad\nbad\ngood\n", "config", "login")
+	if code != 3 {
+		t.Errorf("exit %d, want 3: %s", code, stderr)
+	}
+	if n := strings.Count(stderr, "Token: "); n != 3 {
+		t.Errorf("%d token prompts, want 3", n)
+	}
+	if _, err := os.Stat(filepath.Join(xdg, "sinkctl")); !os.IsNotExist(err) {
+		t.Errorf("config dir created: %v", err)
 	}
 }

@@ -83,6 +83,13 @@ func TestExitCodes(t *testing.T) {
 	}
 }
 
+func TestNoCredsLoginHint(t *testing.T) {
+	code, _, stderr := exec(t, "projects", "list")
+	if code != 3 || !strings.Contains(stderr, "sinkctl config login") {
+		t.Errorf("exit %d, stderr %q", code, stderr)
+	}
+}
+
 func TestPlainErrorWithYAML(t *testing.T) {
 	_, _, stderr := exec(t, "mcp", "-o", "yaml")
 	if stderr == "" || stderr[0] == '{' {

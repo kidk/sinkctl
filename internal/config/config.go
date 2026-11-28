@@ -135,7 +135,7 @@ func (c *Config) Resolve(name string, getenv func(string) string) (Context, erro
 		ctx.Token = v
 	}
 	if ctx.URL == "" || ctx.Token == "" {
-		return Context{}, fmt.Errorf("no Bugsink URL/token: set %s and %s or configure a context", EnvURL, EnvToken)
+		return Context{}, fmt.Errorf("no Bugsink URL/token: run `sinkctl config login`, or set %s and %s", EnvURL, EnvToken)
 	}
 	return ctx, nil
 }

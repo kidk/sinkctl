@@ -53,16 +53,13 @@ gh attestation verify sinkctl_X.Y.Z_linux_amd64.tar.gz --repo kidk/sinkctl
 
 ## Configure
 
-Create an API token in Bugsink, then save it as a named context:
+Create an API token in Bugsink, then run:
 
 ```sh
-sinkctl config login prod --url https://bugsink.example.com   # prompts for the token
-echo "$TOKEN" | sinkctl config login staging --url https://bugsink.staging.example.com --token-stdin
-sinkctl config use prod
+sinkctl config login
 ```
 
-`login` checks the token against Bugsink before saving (skip with `--no-verify`)
-and switches to the new context. Or set environment variables:
+For scripts and flags, see `sinkctl config login --help`. Or set environment variables:
 
 ```sh
 export BUGSINK_URL=https://bugsink.example.com
