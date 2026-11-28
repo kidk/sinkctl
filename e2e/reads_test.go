@@ -5,6 +5,9 @@ package e2e
 import (
 	"bytes"
 	"encoding/json"
+	"io"
+	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -47,6 +50,23 @@ func TestCLIReads(t *testing.T) {
 				t.Errorf("stdout not JSON: %s", out)
 			}
 		})
+	}
+}
+
+// config login's URL probe assumes a token-less request gets a JSON 401/403 here.
+func TestUnauthenticatedProjectsIsJSONDenial(t *testing.T) {
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, os.Getenv("BUGSINK_URL")+"/api/canonical/0/projects/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close() //nolint:errcheck // test
+	body, _ := io.ReadAll(res.Body)
+	if (res.StatusCode != http.StatusUnauthorized && res.StatusCode != http.StatusForbidden) || !json.Valid(body) {
+		t.Errorf("got %d %s", res.StatusCode, body)
 	}
 }
 
